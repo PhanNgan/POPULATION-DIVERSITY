@@ -1,0 +1,109 @@
+
+## Configuration file : to detect SNP from pair-end FASTQ files to a filtered VCF, and cleaning intermediate data
+## http://toggle.southgreen.fr
+
+
+###############################
+# 1 - PIPELINE CONFIGURATION
+###############################
+
+#------------------------------
+#   Building Workflow
+#------------------------------
+# After the tag $order define steps composing the pipeline and
+# their relative order.
+# Each line consists of the step number followed by
+# an equal symbol then by the softwareÕs name (e.g. 1=FastQC).
+#
+# - All the steps with a number <1000
+# are carried out for each sample separately
+#
+# - All the steps with a number > or = 1000
+# are performed as a global analysis 
+#
+# - Step name is not casse-sensitive
+#------------------------------
+
+$order
+1=bwaAln
+2=bwaSampe
+3=picardToolsSortSam
+4=samtoolsflagstat
+5=samtoolsview
+6=samToolsIndex
+7=gatkRealignerTargetCreator
+8=gatkIndelRealigner
+9=picardToolsMarkDuplicates
+1000=gatkHaplotypeCaller
+1001=gatkVariantFiltration
+
+
+
+
+#------------------------------
+#   Providing software parameters
+#------------------------------
+# Foreach software, parameters can be provided after the line
+# composed of the symbol $ followed by the software name 
+#
+# - If no software parameter provided, the default ones are
+# used.
+# - TOGGLe will handle itself the input and output files as
+# well as the references.
+# - see software manual for more details about 
+#------------------------------
+
+$bwa aln
+-n=5
+
+$bwa sampe
+-a 500
+
+$picardToolsSortSam
+SORT_ORDER=coordinate
+VALIDATION_STRINGENCY=SILENT
+CREATE_INDEX=TRUE
+
+$samToolsView
+-h
+-b
+-f=0x02
+
+$gatkRealignerTargetCreator
+-T=RealignerTargetCreator
+
+$gatkIndelRealigner
+-T=IndelRealigner
+
+$picardToolsMarkDuplicates
+VALIDATION_STRINGENCY=SILENT
+CREATE_INDEX=TRUE
+REMOVE_DUPLICATES=TRUE
+
+$gatkHaplotypeCaller
+-T=HaplotypeCaller
+-rf BadCigar
+
+$gatkVariantFiltration
+-T=VariantFiltration
+--filterName 'FILTER-DP' --filterExpression 'DP<10 || DP>600' --filterName 'LowQual' --filterExpression 'QUAL<30'
+
+
+
+###############################
+# 2 - DATA MANAGEMENT
+###############################
+
+#------------------------------
+#   Removing intermediate data
+#------------------------------
+# users can specify after the tag $cleaner,
+# the list of step number (one by line)
+#------------------------------
+
+$cleaner
+1
+2
+7
+
+

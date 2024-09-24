@@ -79,18 +79,28 @@ for sample in samples/*_reads_1.fastq; do
     java -jar picard.jar MarkDuplicates I=$sorted_bam O=$dedup_bam M=${base}_metrics.txt REMOVE_DUPLICATES=true
     samtools index $dedup_bam
     
-    # Add dedup BAM file to the BAM list
-    echo $dedup_bam >> $BAMLIST
+    # Change sample name in Bam file to be recognise by Freebayes
+    samtools addreplacerg -r '@RG\tID:${base}\tSM:${base}' ${base}_dedup.bam -o ${base}_rg.bam    
+    
+	# Add dedup BAM file to the BAM list
+    echo $rg_bam >> $BAMLIST
     
     # Cleanup intermediate files
     rm $sam $bam $sorted_bam
 done
 
+
+##check for the sample name in BAM file and change name
+samtools view -H MgBn_dedup.bam
+
+samtools addreplacerg -r '@RG\tID:MgBn\tSM:MgBn' MgBn_dedup.bam -o MgBn_rg.bam
+
+
 # Call SNPs using FreeBayes on multiple samples
 freebayes -f $REF_GENOME -L $BAMLIST -v $RAW_VCF
 
 # Filter SNPs with vcffilter
-vcffilter -f "QUAL > 20 & DP > 10 & GQ > 30" $RAW_VCF > $FILTERED_VCF
+vcftools --vcf $RAW_VCF --minQ 20 --minDP 10 --minGQ 30 --recode --recode-INFO-all --out MgIt_FB_Q20_DP10_GQ30
 
 # Optional: Cleanup BAM list file
 rm $BAMLIST
@@ -103,8 +113,11 @@ toggleGenerator.pl -d FASTQ -r CANU_283scf_renamed.fasta  -c SNPdiscoveryPaired.
 
 ## Remove heterozygosity in vcf file following this script: https://github.com/GDKO/gdk_scripts/blob/master/popgenvcf/remove_het_vcf.pl
 
+bcftools view -e 'COUNT(GT="0/1")=N_SAMPLES' MgIt_FB_Q20_DP10_GQ30.recode.vcf -o MgIt_FB_Q20_DP10_GQ30_removeHET.vcf -O v
+
 # To remove genotype 1/1 in MgVn8 (column 10 in vcf): because the reference was made by MgVN18, we should not have the variant in this collumn.
 awk '$10!~/^1/' gen_canu_1.1.vcf > gen_canu_1.1_rm_11vn.vcf
+bcftools view -e 'GT[0]="1/1"' filtered_output.vcf -o MgIt_FB_Q20_DP10_GQ30_removedHET_controlMGVN18.vcf  -O v
 
 #### PCA
 library("SNPRelate")

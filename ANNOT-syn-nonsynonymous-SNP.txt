@@ -1,0 +1,30 @@
+##### ANNOTATION OF synonymous and  nonsynonymous SNP using snpEff
+Follow these steps
+
+- Inside snpEff directory create a new directory called data
+- Inside data create a new directory called mgram
+- Inside mgram directory you need to add the following files
+- The fasta file renamed into sequences.fa
+- The gff3 file renamed into genes.gff
+- The cds file renamed into cds.fa (Each header should have the mRNA: added before the id - for example >mg1g0000001 should be >mRNA:mg1g0000001 ; you can use sed for that sed 's/>/>mRNA:/' file1 > file2)
+- The protein file renamed into proteins.fa (same header change as for the cds)
+- Edit snpEff.config file and add the following two lines at the end
+# Meloidogyne graminicola
+mgram.genome : Meloidogyne graminicola
+ Run from inside the snpEff directory
+java -jar snpEff.jar build -gff3 -v mgram
+
+The header change has to happen because naming comes from the ID tag in the gff file (ID=mRNA:mg1g0000001;Name=mg1g0000001;Parent=gene:mg1g0000001)
+
+java -jar snpEff.jar build -gff3 -v mgram
+
+java -jar snpEff.jar eff -v mgram input.vcf > output.vcf
+
+bedtools intersect -header -a annotated_output.vcf -b regions.bed > extracted_snps_in_regions.vcf
+
+##to extract SNPs in hetero regions
+
+bedtools intersect -header -a  -b regions.bed > extracted_snps_in_regions.vcf
+
+
+

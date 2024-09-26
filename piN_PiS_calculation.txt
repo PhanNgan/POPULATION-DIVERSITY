@@ -1,0 +1,67 @@
+#### SCRIPTS CALCULATE PiN / PiS using Bio++
+
+ref="CANU_283scf_renamed.fasta" 
+
+1) Create independent vcf files for each sample. This can be done with a cut command.
+cut -f 1-9,22 snp_data.vcf >  Mg-VN6.vcf
+2) Create FASTA for each vcf file
+------perl vcf2fa.pl §ref [sample].vcf > [sample].vcf.fa
+loop:
+for vcf in Mg-*.vcf; do
+    sample_name="${vcf%.vcf}"
+    perl vcf2fa.pl "$ref" "$vcf" > "${sample_name}.vcf.fa"         echo "Processed $vcf into ${sample_name}.vcf.fa"; done
+
+4) Extract coding regions from FASTA/GFF3 (https://github.com/gpertea/gffread or conda install -c bioconda gffread)
+------gffread -x [sample].cds -g [sample].vcf.fa [ref.gff3]
+
+Loop:
+for vcf in Mg-*.vcf.fa ; do     sample_name="${vcf%.vcf.fa}"    ;     gffread -x "${sample_name}.cds" -g "${sample_name}.vcf.fa" annotations.gff3        ; done
+
+5) Create a fasta group for each gene
+--Create a file with two columns separated by space ([sample_name] [sample.cds])
+file_list: 
+Mg-Brazil Mg-Brazil.cds
+Mg-C21 Mg-C21.cds
+Mg-C25 Mg-C25.cds
+Mg-Java2 Mg-Java2.cds
+Mg-L1 Mg-L1.cds
+Mg-L2 Mg-L2.cds
+Mg-P Mg-P.cds
+Mg-VN11 Mg-VN11.cds
+Mg-VN18 Mg-VN18.cds
+Mg-VN27 Mg-VN27.cds
+Mg-VN6 Mg-VN6.cds
+------mkdir protein_fastas
+------perl make_protein_files.pl [file_list]
+--The fasta files will be within protein_fastas directory
+6) Run bpppopstats for each gene (https://github.com/BioPP/bppsuite), can be done with a for loop
+------bpppopstats input.sequence.file=[gene].aln pop.stats=PiN_PiS alphabet="Codon(letter=DNA)" > [gene].outfile
+
+Loop:
+for gene in *.aln ; do     gene="${gene%.aln}"    ;     bpppopstats input.sequence.file="${gene}.aln" pop.stats=PiN_PiS alphabet="Codon(letter=DNA)" > "${gene}.outfile"        ; done
+
+--You will have a result for each gene
+
+The output of bpp looks like this
+
+PiN:...................................: 0.277778
+PiS:...................................: 1.66667
+#N:....................................: 1941.39
+#S:....................................: 542.611
+PiN / PiS (corrected for #N and #S):...: 0.0465827
+
+You need to correct PiN and PiS with #N and #S such as πN = PiN/N and πS = PiS/S
+
+
+## Combine all results in 1 file
+for gene in *.aln ; do     gene="${gene%.aln}"    ; awk 'NR==15 || NR==17' "${gene}.outfile" | cut -d ':' -f 3 | tr -d ' ' | awk 'NR==1 {line1=$1} NR==2 {print line1 / $1}' > "${gene}.piN"       ; done
+
+for gene in *.outfile ; do     gene="${gene%.outfile}"    ; awk 'NR==10 || NR==15 || NR==16 || NR==17 || NR==18 || NR==19' "${gene}.outfile" | cut -d ':' -f 3 | tr -d ' ' | sed 's/:/\t/g' >  "${gene}.sumout"      ; done
+awk '{key=$1
+    $1=""
+    data[key]=(key in data ? data[key] $0 : $0)
+}
+END {
+    for (key in data)
+        print key data[key]
+}' *.sumout > combined.piallgenes

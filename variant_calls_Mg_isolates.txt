@@ -5,38 +5,38 @@
 
 		skewer -n -q 30 -l 51 - t 16 -m pe -o MgVn18_trimmed MgVN18_Hiseq_raw_R1.fastq.gz MgVN18_Hiseq_raw_R1.fastq.gz
 
-##Step3 (optional )If the GC content indicate the second pick at around 50, which indicate potential contamination of bacterial or fungi, we need to process the decontamination process as below, if the sequence are nice, we don't need the decontanitation 
-# Pre-assembly with Spades
+##Step3 (optional ): CLEANING CONTAMINATION: If the GC content indicate the second pick at around 50, which indicate potential contamination of bacterial or fungi, we need to process the decontamination process as below, if the sequence are nice, we don't need the decontanitation 
+	# Pre-assembly with Spades
 
-		spades.py --only-assembler --careful -k 21,33,55,77,99 -m 450 -t 8 -o . --pe1-1 MgVn18_trimmed_R1.fastq.gz --pe1-2 MgVn18_trimmed_R1.fastq.gz
+		spades.py --only-assembler --careful -k 21,33,55,77,99 -m 450 -t 8 -o . --pe1-1 MgVn18_trimmed_R1.fastq.gz --pe1-2 	MgVn18_trimmed_R1.fastq.gz
 		
-# Search NCBI nt with blast
-		blastn -task megablast -query  Vn18_preassemble_contig.fa -db nt -culling_limit 2 -out Vn18_preassemble_nt.tsv -outfmt '6 qseqid staxids bitscore std sscinames sskingdoms stitle' -num_threads 16 -evalue 1e-25 
+	# Search NCBI nt with blast (nt database installed in IRD server)
+		blastn -task megablast -query  Vn18_preassemble_contig.fa -db nt -culling_limit 2 -out Vn18_preassemble_nt.tsv -outfmt 	'6 qseqid staxids bitscore std sscinames sskingdoms stitle' -num_threads 16 -evalue 1e-25 
 
-# Map Hiseq against pre-assembled contig with BWA
+	# Map Hiseq against pre-assembled contig with BWA
 		bwa index Vn18_preassemble_contig.fa #index the fasta file
-		bwa mem -t 4 Vn18_preassemble_contig.fa MgVn18_trimmed_R1.fastq MgVn18_trimmed_R1.fastq | samtools sort -@4 -O BAM -o Vn18_preasembled.bam #map hiseq to preassemble contig
+		bwa mem -t 4 Vn18_preassemble_contig.fa MgVn18_trimmed_R1.fastq MgVn18_trimmed_R1.fastq | samtools sort -@4 -O BAM -o 		Vn18_preasembled.bam #map hiseq to preassemble contig
 		samtools index Vn18_preasembled.bam #index bam file
 
 
-# Screening by Blobtools
-		blobtools create -i Vn18_preassemble_contig.fa -b Vn18_preasembled.bam -t Vn18_preassemble_nt.tsv --db ./data/nodesDB.txt -o Vn18_preassembled_blobtool #Create the BlobDB JSON file
+	# Screening by Blobtools
+		blobtools create -i Vn18_preassemble_contig.fa -b Vn18_preasembled.bam -t Vn18_preassemble_nt.tsv --db 				./data/nodesDB.txt -o Vn18_preassembled_blobtool #Create the BlobDB JSON file
 		blobtools view -i Vn18_preassembled_blobtool.blobDB.json #Generate a table
 		blobtools plot -i Vn18_preassembled_blobtool.blobDB.json #Create the plot
 
-# Some contamination of Proteobacteria was found, therefore, need to remove from the Hiseq data
-# Remove contigs hit to Proteobacteria 
-		grep -v "#" Vn18_preassembled_blobtool.blobDB.table.txt | grep -v "Proteobacteria" | cut -f1 > Vn18_preassemble_cleaned.list
+	# Some contamination of Proteobacteria was found, therefore, need to remove from the Hiseq data
+	# Remove contigs hit to Proteobacteria 
+		grep -v "#" Vn18_preassembled_blobtool.blobDB.table.txt | grep -v "Proteobacteria" | cut -f1 > 			Vn18_preassemble_cleaned.list
 
-# Get clean pre-assembled contigs uing one-line Perl
-		perl -ne 'if(/^>(\S+)/){$c=$i{$1}}$c?print:chomp;$i{$_}=1 if @ARGV' Vn18_preassemble_cleaned.list Vn18_preassemble_contig.fa > Vn18_preassemble_cleaned.fasta
+	# Get clean pre-assembled contigs uing one-line Perl
+		perl -ne 'if(/^>(\S+)/){$c=$i{$1}}$c?print:chomp;$i{$_}=1 if @ARGV' Vn18_preassemble_cleaned.list 	Vn18_preassemble_contig.fa > Vn18_preassemble_cleaned.fasta
 
-# Get cleaned read using Bowtie2
+	# Get cleaned read using Bowtie2
 
 		bowtie2-build  Vn18_preassemble_cleaned.fasta Vn18_preassemble_cleaned 
-		bowtie2 -x Vn18_preassemble_cleaned -p 4 -L 20 -1 -2 –S Vn18_preassembled.sam --al-conc ./Vn18_Hiseq_cleaned.fastq   ##output are cleaned paired-end sequences Vn18_Hiseq_cleaned_1.fastq and Vn18_Hiseq_cleaned_2.fastq
+		bowtie2 -x Vn18_preassemble_cleaned -p 4 -L 20 -1 -2 –S Vn18_preassembled.sam --al-conc ./Vn18_Hiseq_cleaned.fastq   # 	#output are cleaned paired-end sequences Vn18_Hiseq_cleaned_1.fastq and Vn18_Hiseq_cleaned_2.fastq
 
-# Removed of mitochondrial reads by mapping with reference mitogenome of M. graminicola NCBI accession: NC_024275.1 and get the unmapped reads
+	# Removed of mitochondrial reads by mapping with reference mitogenome of M. graminicola NCBI accession: NC_024275.1 and get the unmapped reads
 
 		bowtie2-build NC_024275.1.fasta NC_024275.1
 		bowtie2 -x NC_024275.1 -p 4 -L 20 -1 -2 –S Vn18_Hiseq_vs_mito.sam --un-conc ./Vn18_Hiseq_cleaned_mitofree.fastq ##output are cleaned and mito-free paired-end reads Vn18_Hiseq_cleaned_mitofree_1.fastq and Vn18_Hiseq_cleaned_mitofree_2.fastq
@@ -44,111 +44,112 @@
 
 
 ### Step 4: Call variants using FreeBayes, ilter: MAPQ > 20, remove the duplicated reads, 30 phred-scaled probability (minGQ), a minimum coverage depth (minDP) = 10
-#!/bin/bash
+	#!/bin/bash
 
-# Set variables
-REF_GENOME="reference_genome.fasta"
-BAMLIST="bamlist.txt"
-RAW_VCF="raw_variants.vcf"
-FILTERED_VCF="filtered_variants.vcf"
+	# Set variables
+	REF_GENOME="reference_genome.fasta"
+	BAMLIST="bamlist.txt"
+	RAW_VCF="raw_variants.vcf"
+	FILTERED_VCF="filtered_variants.vcf"
 
-# Index the reference genome
-bowtie2-build $REF_GENOME reference_genome
+	# Index the reference genome
+	bowtie2-build $REF_GENOME reference_genome
+	
+	# Initialize BAM list file
+	> $BAMLIST
+	
+	# Loop through samples and process each pair of reads
+	for sample in samples/*_reads_1.fastq; do
+	    base=$(basename $sample "_reads_1.fastq")
+	    reads_1="samples/${base}_reads_1.fastq"
+	    reads_2="samples/${base}_reads_2.fastq"
+	    sam="${base}_aligned.sam"
+	    bam="${base}_aligned.bam"
+	    sorted_bam="${base}_aligned_sorted.bam"
+	    dedup_bam="${base}_dedup.bam"
+	    
+	    # Align reads to the reference genome
+	    bowtie2 -x reference_genome -1 $reads_1 -2 $reads_2 -S $sam
+	    
+	    # Convert SAM to BAM, sort
+	    samtools view -bS $sam > $bam
+	    samtools sort $bam -o $sorted_bam
+	    
+	    # Mark duplicates and create index
+	    java -jar picard.jar MarkDuplicates I=$sorted_bam O=$dedup_bam M=${base}_metrics.txt REMOVE_DUPLICATES=true
+	    samtools index $dedup_bam
+	    
+	    # Change sample name in Bam file to be recognise by Freebayes
+	    samtools addreplacerg -r '@RG\tID:${base}\tSM:${base}' ${base}_dedup.bam -o ${base}_rg.bam    
+	    
+		# Add dedup BAM file to the BAM list
+	    echo $rg_bam >> $BAMLIST
+	    
+	    # Cleanup intermediate files
+	    rm $sam $bam $sorted_bam
+	done
+	
 
-# Initialize BAM list file
-> $BAMLIST
-
-# Loop through samples and process each pair of reads
-for sample in samples/*_reads_1.fastq; do
-    base=$(basename $sample "_reads_1.fastq")
-    reads_1="samples/${base}_reads_1.fastq"
-    reads_2="samples/${base}_reads_2.fastq"
-    sam="${base}_aligned.sam"
-    bam="${base}_aligned.bam"
-    sorted_bam="${base}_aligned_sorted.bam"
-    dedup_bam="${base}_dedup.bam"
-    
-    # Align reads to the reference genome
-    bowtie2 -x reference_genome -1 $reads_1 -2 $reads_2 -S $sam
-    
-    # Convert SAM to BAM, sort
-    samtools view -bS $sam > $bam
-    samtools sort $bam -o $sorted_bam
-    
-    # Mark duplicates and create index
-    java -jar picard.jar MarkDuplicates I=$sorted_bam O=$dedup_bam M=${base}_metrics.txt REMOVE_DUPLICATES=true
-    samtools index $dedup_bam
-    
-    # Change sample name in Bam file to be recognise by Freebayes
-    samtools addreplacerg -r '@RG\tID:${base}\tSM:${base}' ${base}_dedup.bam -o ${base}_rg.bam    
-    
-	# Add dedup BAM file to the BAM list
-    echo $rg_bam >> $BAMLIST
-    
-    # Cleanup intermediate files
-    rm $sam $bam $sorted_bam
-done
+	#check for the sample name in BAM file and change name
+	samtools view -H MgBn_dedup.bam
+	
+	samtools addreplacerg -r '@RG\tID:MgBn\tSM:MgBn' MgBn_dedup.bam -o MgBn_rg.bam
+	
+	
+	# Call SNPs using FreeBayes on multiple samples
+	freebayes -f $REF_GENOME -L $BAMLIST -v $RAW_VCF
+	
+	# Filter SNPs with vcffilter
+	vcftools --vcf $RAW_VCF --minQ 20 --minDP 10 --minGQ 30 --recode --recode-INFO-all --out MgIt_FB_Q20_DP10_GQ30
+	
+	# Optional: Cleanup BAM list file
+	rm $BAMLIST
 
 
-##check for the sample name in BAM file and change name
-samtools view -H MgBn_dedup.bam
-
-samtools addreplacerg -r '@RG\tID:MgBn\tSM:MgBn' MgBn_dedup.bam -o MgBn_rg.bam
-
-
-# Call SNPs using FreeBayes on multiple samples
-freebayes -f $REF_GENOME -L $BAMLIST -v $RAW_VCF
-
-# Filter SNPs with vcffilter
-vcftools --vcf $RAW_VCF --minQ 20 --minDP 10 --minGQ 30 --recode --recode-INFO-all --out MgIt_FB_Q20_DP10_GQ30
-
-# Optional: Cleanup BAM list file
-rm $BAMLIST
-
-
-## (instead of FreeBayes) : Call SNP with TOGGLE pipeline, check the SNPdiscoveryPaired.config.txt (attached)
+## STEP 5 (OPTIONAL) (If FREEBAYES is error, this is an alternate method) : Call SNP with TOGGLE pipeline, check the SNPdiscoveryPaired.config.txt (attached)
 toggleGenerator.pl -d FASTQ -r CANU_283scf_renamed.fasta  -c SNPdiscoveryPaired.config.txt -o Isolates_canu
 
-## Beside: The M. graminicola genome has an average heterozygosity of 1.36% ± 0.78 (Phan et al., 2020; Besnard et al., 2019). The final reference genome is a haploid genomic sequence that mainly consists of collapsed haplotypes (Phan et al., 2020). Thus, after mapping of the Mg-VN18 reads to the Mg-VN18 haploid genomic reference sequence (Phan et al., 2020), the collapsed contigs obtained corresponded either to heterozygous regions [i.e., two haplotypes (or alleles) detected and coded as follow: genotype "0/1" where 0 = first haplotype sequence identical to the reference, and 1 = second haplotype sequence]; or to homozygous regions (identical to the reference sequence and coded "0/0"). When reads of other isolates were mapped to the reference genome, six possible genotypes were defined as follow: "0/0" = homozygous region with the same sequence as the reference, "0/1" = heterozygous region containing the reference haplotype sequence and the alternative haplotype of Mg-VN18, "1/1" = homozygous region bearing only the alternative haplotype of Mg-VN18, "0/2" = heterozygous region containing the reference haplotype sequence and a second alternative allele (distinct from this detected in Mg-VN18), "1/2" = heterozygous region bearing first and second alternative haplotypes, and "2/2" = homozygous region bearing only a second alternative allele (not detected in Mg-VN18). A matrix of the variant genotypes of the 13 isolates was constructed allowing us to score polymorphism for each position in the scaffolding. The distribution of variant genotypes for each isolate on the reference scaffolds was visualized using CIRCOS (http://circos.ca/) in order to reveal specificities of each isolate (i.e., polymorphism, genome organization). Note that homozygous "0/0" and heterozygous "0/1" genotypes among all isolates represent non-variable regions. Meanwhile, heterozygous "1/2" and "0/2" genotypes as well as homozygous "1/1" and "2/2" genotypes correspond to true variants between the reference Mg-VN18 and any other isolate. Therefore, the final matrix of single nucleotide variants (SNV) only includes loci which have at least one variant genotypes ("1/1", "2/2", "1/2", "0/2") among all isolates. 
+## STEP 6: Filter heterozygous variants in the VCF file:
+	Explanation:  The M. graminicola genome has an average heterozygosity of 1.36% ± 0.78 (Phan et al., 2020; Besnard et al., 2019). The final reference genome is a haploid genomic sequence that mainly consists of collapsed haplotypes (Phan et al., 2020). Thus, after mapping of the Mg-VN18 reads to the Mg-VN18 haploid genomic reference sequence (Phan et al., 2020), the collapsed contigs obtained corresponded either to heterozygous regions [i.e., two haplotypes (or alleles) detected and coded as follow: genotype "0/1" where 0 = first haplotype sequence identical to the reference, and 1 = second haplotype sequence]; or to homozygous regions (identical to the reference sequence and coded "0/0"). When reads of other isolates were mapped to the reference genome, six possible genotypes were defined as follow: "0/0" = homozygous region with the same sequence as the reference, "0/1" = heterozygous region containing the reference haplotype sequence and the alternative haplotype of Mg-VN18, "1/1" = homozygous region bearing only the alternative haplotype of Mg-VN18, "0/2" = heterozygous region containing the reference haplotype sequence and a second alternative allele (distinct from this detected in Mg-VN18), "1/2" = heterozygous region bearing first and second alternative haplotypes, and "2/2" = homozygous region bearing only a second alternative allele (not detected in Mg-VN18). A matrix of the variant genotypes of the 13 isolates was constructed allowing us to score polymorphism for each position in the scaffolding. The distribution of variant genotypes for each isolate on the reference scaffolds was visualized using CIRCOS (http://circos.ca/) in order to reveal specificities of each isolate (i.e., polymorphism, genome organization). Note that homozygous "0/0" and heterozygous "0/1" genotypes among all isolates represent non-variable regions. Meanwhile, heterozygous "1/2" and "0/2" genotypes as well as homozygous "1/1" and "2/2" genotypes correspond to true variants between the reference Mg-VN18 and any other isolate. Therefore, the final matrix of single nucleotide variants (SNV) only includes loci which have at least one variant genotypes ("1/1", "2/2", "1/2", "0/2") among all isolates. 
+	
+	# To remove heterozygous variants in vcf file following this script: https://github.com/GDKO/gdk_scripts/blob/master/popgenvcf/remove_het_vcf.pl
+	
+	bcftools view -e 'COUNT(GT="0/1")=N_SAMPLES' MgIt_FB_Q20_DP10_GQ30.recode.vcf -o MgIt_FB_Q20_DP10_GQ30_removeHET.vcf -O v
+	
+	# To remove genotype 1/1 in MgVn8 (column 10 in vcf): because the reference was made by MgVN18, we should not have the variant in this collumn.
+	awk '$10!~/^1/' gen_canu_1.1.vcf > gen_canu_1.1_rm_11vn.vcf
+	bcftools view -e 'GT[0]="1/1"' filtered_output.vcf -o MgIt_FB_Q20_DP10_GQ30_removedHET_controlMGVN18.vcf  -O v
 
-## Remove heterozygosity in vcf file following this script: https://github.com/GDKO/gdk_scripts/blob/master/popgenvcf/remove_het_vcf.pl
-
-bcftools view -e 'COUNT(GT="0/1")=N_SAMPLES' MgIt_FB_Q20_DP10_GQ30.recode.vcf -o MgIt_FB_Q20_DP10_GQ30_removeHET.vcf -O v
-
-# To remove genotype 1/1 in MgVn8 (column 10 in vcf): because the reference was made by MgVN18, we should not have the variant in this collumn.
-awk '$10!~/^1/' gen_canu_1.1.vcf > gen_canu_1.1_rm_11vn.vcf
-bcftools view -e 'GT[0]="1/1"' filtered_output.vcf -o MgIt_FB_Q20_DP10_GQ30_removedHET_controlMGVN18.vcf  -O v
-
-#### PCA
-library("SNPRelate")
-library(ggplot2)
-vcf.fn<-"All_runs_ref.Q20.DP10.vcf"
-snpgdsVCF2GDS(vcf.fn, "ccm2.gds",  method="copy.num.of.ref")
-genofile <- openfn.gds("ccm2.gds")
-ccm_pca<-snpgdsPCA(genofile,autosome.only=FALSE)
-
-# Assuming ccm_pca is your PCA result object with $eigenvect and $sample.id
-# Generate a data frame from PCA results for easier plotting
-pca_data <- data.frame(PC1 = ccm_pca$eigenvect[,1], 
-                       PC2 = ccm_pca$eigenvect[,2], 
-                       Sample = as.factor(ccm_pca$sample.id))
-
-# Assign a unique shape (pch) to each sample
-shapes <- 1:length(unique(pca_data$Sample))
-
-# Create a PCA plot
-ggplot(pca_data, aes(x = PC1, y = PC2, color = Sample, shape = Sample)) +
-  geom_point(size = 3) +  # Increase point size
-  scale_shape_manual(values = shapes) +  # Set unique shapes
-  theme_minimal(base_size = 15) +  # Minimal theme with larger base text size
-  theme(panel.grid.major = element_blank(),  # Remove major grid lines
-        panel.grid.minor = element_blank(),  # Remove minor grid lines
-        panel.background = element_blank(),  # White background
-        axis.line = element_line(colour = "black"),  # Black axis lines
-        legend.position = "right") +  # Position legend on the right
-  labs(color = "Sample", shape = "Sample")  # Label legend entries
-
-## variance proportion (%)
-pc.percent <- ccm_pca$varprop*100
-head(round(pc.percent, 2))
+#### STEP 7: PCA analysis
+	library("SNPRelate")
+	library(ggplot2)
+	vcf.fn<-"All_runs_ref.Q20.DP10.vcf"
+	snpgdsVCF2GDS(vcf.fn, "ccm2.gds",  method="copy.num.of.ref")
+	genofile <- openfn.gds("ccm2.gds")
+	ccm_pca<-snpgdsPCA(genofile,autosome.only=FALSE)
+	
+	# Assuming ccm_pca is your PCA result object with $eigenvect and $sample.id
+	# Generate a data frame from PCA results for easier plotting
+	pca_data <- data.frame(PC1 = ccm_pca$eigenvect[,1], 
+	                       PC2 = ccm_pca$eigenvect[,2], 
+	                       Sample = as.factor(ccm_pca$sample.id))
+	
+	# Assign a unique shape (pch) to each sample
+	shapes <- 1:length(unique(pca_data$Sample))
+	
+	# Create a PCA plot
+	ggplot(pca_data, aes(x = PC1, y = PC2, color = Sample, shape = Sample)) +
+	  geom_point(size = 3) +  # Increase point size
+	  scale_shape_manual(values = shapes) +  # Set unique shapes
+	  theme_minimal(base_size = 15) +  # Minimal theme with larger base text size
+	  theme(panel.grid.major = element_blank(),  # Remove major grid lines
+	        panel.grid.minor = element_blank(),  # Remove minor grid lines
+	        panel.background = element_blank(),  # White background
+	        axis.line = element_line(colour = "black"),  # Black axis lines
+	        legend.position = "right") +  # Position legend on the right
+	  labs(color = "Sample", shape = "Sample")  # Label legend entries
+	
+	## variance proportion (%)
+	pc.percent <- ccm_pca$varprop*100
+	head(round(pc.percent, 2))
 
